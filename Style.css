@@ -1,0 +1,32 @@
+body { font-family: 'Inter', sans-serif; margin: 0; background: #f9fafb; color: #333; }
+
+header { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: #0077cc; color: white; }
+
+header h1 { font-size: 18px; margin: 0; }
+
+.menu-toggle { cursor: pointer; }
+
+.menu { display: none; flex-direction: column; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 12px; gap: 10px; }
+
+body.show-menu .menu { display: flex; }
+
+.menu button { background: #0077cc; color: white; border: none; padding: 10px; border-radius: 6px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+
+.filtres { display: flex; padding: 12px; gap: 8px; justify-content: center; }
+
+.filtres select, .filtres input { padding: 6px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
+
+#stats { text-align: center; font-weight: 600; margin: 12px 0; }
+
+.cards { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+
+.card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.card .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.card input, .card select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+
+.card label { font-size: 12px; color: #666; }
+
+.card[data-statut="OK"] { background: #e6f7ec; } .card[data-statut="KO"] { background: #ffe6e6; } .card[data-statut="À tester"] { background: #fffbe6; } .card[data-statut="Bloqué"] { background: #f9d0ff; }
+
