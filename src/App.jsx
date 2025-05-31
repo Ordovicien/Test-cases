@@ -278,10 +278,18 @@ export default function App() {
             {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
           </div>
           <div className="form-field dataset-field-wrapper">
-            <label htmlFor="newTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
-            <textarea id="newTestDataset" className={`input ${formErrors.dataset ? 'input-error' : ''}`} placeholder='e.g., {"user": "{{default_username}}"}' value={newTest.dataset} onChange={e => setNewTest({ ...newTest, dataset: e.target.value })} rows={5} ref={addDatasetTextareaRef} />
-            {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
-            <button type="button" className="btn-insert-variable" onClick={e => { variableInserterTargetRef.current = e.target; setShowVariableInserter(prev => !prev); }}>{'{ Insert Variable {'}</button>
+            <label htmlFor="editTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
+            <textarea id="editTestDataset" />
+            <button
+              type="button"
+              className="btn-insert-variable"
+              onClick={e => {
+                variableInserterTargetRef.current = e.target;
+                setShowVariableInserter(prev => !prev);
+              }}
+            >
+              {'Insert Variable'}
+            </button>
           </div>
           <select className="select-input" value={newTest.status} onChange={e => setNewTest({ ...newTest, status: e.target.value })}>
             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -306,9 +314,17 @@ export default function App() {
             </div>
             <div className="form-field dataset-field-wrapper">
               <label htmlFor="editTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
-              <textarea id="editTestDataset" className={`input ${formErrors.dataset ? 'input-error' : ''}`} placeholder='e.g., {"user": "{{default_username}}"}' value={editingFields.dataset} onChange={e => setEditingFields({ ...editingFields, dataset: e.target.value })} rows={5} ref={editDatasetTextareaRef} />
-              {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
-              <button type="button" className="btn-insert-variable" onClick={e => { variableInserterTargetRef.current = e.target; setShowVariableInserter(prev => !prev); }}>{'{ Insert Variable {'}</button>
+              <textarea id="editTestDataset" />
+              <button
+                type="button"
+                className="btn-insert-variable"
+                onClick={e => {
+                  variableInserterTargetRef.current = e.target;
+                  setShowVariableInserter(prev => !prev);
+                }}
+              >
+                {'Insert Variable'}
+              </button>
             </div>
             <select className="select-input" value={editingFields.status} onChange={e => setEditingFields({ ...editingFields, status: e.target.value })}>
               {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}

@@ -181,6 +181,18 @@ main {
   max-width: 120px;
 }
 
+/* Fix largeur de la colonne Status */
+.styled-table th:nth-child(5),
+.styled-table td:nth-child(5) {
+  width: 120px;    /* ajuste selon le rendu, 110-130px fonctionne souvent */
+  min-width: 80px;
+  max-width: 140px;
+  text-align: center;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+
 /* Harmonisation couleur de fond même sur la colonne actions */
 .styled-table tbody tr:nth-child(even) td.table-actions {
   background: #f7fafd !important;
@@ -230,15 +242,15 @@ main {
 
 /* BADGES STATUS */
 .badge {
-  padding: 7px 17px;
+  padding: 5px 11px;
   border-radius: 22px;
-  font-size: 1.03rem;
+  font-size: 0.99rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-width: 90px;
+  min-width: unset;
   justify-content: center;
   user-select: none;
 }
@@ -526,16 +538,17 @@ main {
 /* Variable inserter popover, dataset field ... */
 .dataset-field-wrapper {
   position: relative;
+  margin-bottom: 10px;
 }
 .btn-insert-variable {
-  position: absolute;
-  top: 0px;
-  right: 5px;
+  display: inline-block;
+  margin-top: 6px;
+  position: static;
   background-color: #f0f0f0;
   border: 1px solid #ccc;
-  padding: 3px 8px;
+  padding: 4px 12px;
   border-radius: 4px;
-  font-size: 0.8em;
+  font-size: 0.95em;
   cursor: pointer;
   color: #333;
 }
