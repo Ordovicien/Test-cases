@@ -1,16 +1,12 @@
 // src/components/TestTableRow.jsx
 import React, { useMemo } from 'react';
-import StatusBadge from './StatusBadge'; // Importer le nouveau composant
-
-// La fonction resolvePlaceholders doit être accessible ici.
-// Soit on la passe en prop, soit on l'importe si elle est dans un fichier utilitaire.
-// Pour l'instant, supposons qu'elle est passée en prop ou définie globalement.
-// Idéalement, déplacez resolvePlaceholders dans un fichier utils.js et importez-la.
+import StatusBadge from './StatusBadge';
+import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 function TestTableRow({
   test,
   globalDataSets,
-  resolvePlaceholders, // Prop pour la fonction de résolution
+  resolvePlaceholders,
   onOpenEditModal,
   onDeleteTest,
   onQuickStatusChange
@@ -24,9 +20,12 @@ function TestTableRow({
     <tr>
       <td>{test.id}</td>
       <td
-        style={{ cursor: "pointer", textDecoration: "underline dotted", color: "#2563eb" }}
+        className="description-cell"
         onClick={() => onOpenEditModal(test)}
-        title="Edit this test"
+        title="Edit this test's details (description, data, status, etc.)"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onOpenEditModal(test)}
       >
         {test.description}
       </td>
@@ -38,14 +37,38 @@ function TestTableRow({
       </td>
       <td>
         <StatusBadge
-            testId={test.id}
-            currentStatus={test.status}
-            onStatusChange={onQuickStatusChange}
+          testId={test.id}
+          currentStatus={test.status}
+          onStatusChange={onQuickStatusChange}
         />
       </td>
-      <td>
-        <button className="btn-edit" onClick={() => onOpenEditModal(test)}>✏️ Edit</button>
-        <button className="btn-delete" onClick={() => onDeleteTest(test)}>🗑️ Delete</button>
+      <td className="table-actions">
+        <div className="table-actions-inner">
+          <button
+            type="button"
+            className="btn-icon btn-edit-action"
+            onClick={e => {
+              e.stopPropagation();
+              onOpenEditModal(test);
+            }}
+            title="Edit Test Case"
+            aria-label={`Edit test case ${test.id}`}
+          >
+            <PencilSquareIcon style={{ width: 20, height: 20 }} />
+          </button>
+          <button
+            type="button"
+            className="btn-icon btn-delete-action"
+            onClick={e => {
+              e.stopPropagation();
+              onDeleteTest(test);
+            }}
+            title="Delete Test Case"
+            aria-label={`Delete test case ${test.id}`}
+          >
+            <TrashIcon style={{ width: 20, height: 20 }} />
+          </button>
+        </div>
       </td>
     </tr>
   );

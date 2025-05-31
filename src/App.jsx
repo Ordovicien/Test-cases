@@ -2,72 +2,23 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import toast, { Toaster } from 'react-hot-toast';
 import "./App.css";
 
-// Importation de tes composants
+// IMPORTS MODULAIRES
+import { STATUSES, initialTests, initialGlobalDataSets } from './constants';
+import { generateNextId, generateGDSId, resolvePlaceholders } from './utils';
+import Modal from './components/Modal';
 import MiniStats from './components/MiniStats';
 import TestTableRow from './components/TestTableRow';
 
-const STATUSES = ["To do", "Success", "Failed"];
-
-function generateNextId(tests) {
-  const numbers = tests.map(t => t.id.match(/^TC(\d+)$/)).filter(Boolean).map(m => parseInt(m[1], 10)).sort((a, b) => a - b);
-  let next = 1;
-  for (let i = 0; i < numbers.length; i++) {
-    if (numbers[i] !== i + 1) { next = i + 1; break; }
-    next = numbers.length + 1;
-  }
-  return `TC${String(next).padStart(3, "0")}`;
-}
-
-const initialTests = [];
-const initialGlobalDataSets = [];
-
-function generateGDSId() {
-  return `gds-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-}
-
-const resolvePlaceholders = (jsonStringOrObject, allGlobalDataSets) => {
-  let jsonString = jsonStringOrObject;
-  if (typeof jsonString !== 'string') {
-    try { jsonString = JSON.stringify(jsonStringOrObject ?? {}); }
-    catch (e) { return { error: "Dataset invalid." }; }
-  }
-  if (!jsonString || !jsonString.trim()) {
-    try { return JSON.parse(jsonString || "{}"); }
-    catch { return {}; }
-  }
-  let activeVariables = {};
-  allGlobalDataSets.forEach(ds => { activeVariables = { ...activeVariables, ...ds.variables }; });
-  try {
-    const parsedObject = JSON.parse(jsonString);
-    function traverseAndReplace(currentPart) {
-      if (Array.isArray(currentPart)) { return currentPart.map(traverseAndReplace); }
-      else if (typeof currentPart === 'object' && currentPart !== null) {
-        const newObj = {};
-        for (const key in currentPart) { newObj[key] = traverseAndReplace(currentPart[key]); }
-        return newObj;
-      } else if (typeof currentPart === 'string') {
-        return currentPart.replace(/\{\{(.*?)\}\}/g, (match, varName) => {
-          const trimmedVarName = varName.trim();
-          return activeVariables.hasOwnProperty(trimmedVarName) ? activeVariables[trimmedVarName] : match;
-        });
-      }
-      return currentPart;
-    }
-    return traverseAndReplace(parsedObject);
-  } catch {
-    return { error: "Invalid JSON structure." };
-  }
-};
+// Si tu utilises Heroicons (npm i @heroicons/react)
+// import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 export default function App() {
+  // --- États principaux ---
   const [tests, setTests] = useState(() => {
     const saved = localStorage.getItem("cahierDeTests");
     try {
       const parsed = saved ? JSON.parse(saved) : initialTests;
-      return parsed.map(t => ({
-        ...t,
-        dataset: typeof t.dataset === 'string' ? t.dataset : JSON.stringify(t.dataset ?? {})
-      }));
+      return parsed.map(t => ({ ...t, dataset: typeof t.dataset === 'string' ? t.dataset : JSON.stringify(t.dataset ?? {}) }));
     } catch (e) {
       localStorage.removeItem('cahierDeTests');
       return initialTests.map(t => ({ ...t, dataset: JSON.stringify(t.dataset ?? {}) }));
@@ -95,6 +46,7 @@ export default function App() {
   const variableInserterTargetRef = useRef(null);
   const variableInserterPopoverRef = useRef(null);
 
+  // --- Effets pour persistance locale ---
   useEffect(() => { localStorage.setItem("cahierDeTests", JSON.stringify(tests)); }, [tests]);
   useEffect(() => { localStorage.setItem("globalDataSets", JSON.stringify(globalDataSets)); }, [globalDataSets]);
   useEffect(() => {
@@ -113,11 +65,13 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showVariableInserter]);
 
+  // --- Statistiques rapides ---
   const totalTests = tests.length;
   const doneTests = useMemo(() => tests.filter(t => t.status === "Success").length, [tests]);
   const failedTests = useMemo(() => tests.filter(t => t.status === "Failed").length, [tests]);
   const todoTests = useMemo(() => tests.filter(t => t.status === "To do").length, [tests]);
 
+  // --- Helpers Form ---
   const validateTestForm = (testData) => {
     const errors = {};
     if (!testData.description.trim()) errors.description = "Description is required.";
@@ -127,6 +81,7 @@ export default function App() {
     return Object.keys(errors).length === 0;
   };
 
+  // --- Handlers TESTS ---
   const handleAddTest = () => {
     if (!validateTestForm(newTest)) return;
     const id = generateNextId(tests);
@@ -138,9 +93,9 @@ export default function App() {
       status: newTest.status
     }]);
     setNewTest({ description: "", expectedData: "", dataset: "", status: "To do" });
-    setShowAddModal(false); setShowVariableInserter(false); toast.success('Test added successfully!');
+    closeAddTestModal();
+    toast.success('Test added successfully!');
   };
-
   const handleDeleteTestConfirmation = (testToDelete) => setShowDeleteConfirm(testToDelete);
   const confirmDeleteTest = () => {
     if (showDeleteConfirm) {
@@ -149,7 +104,6 @@ export default function App() {
       toast.success(`Test ${showDeleteConfirm.id} deleted.`);
     }
   };
-
   const handleOpenEditModal = (test) => {
     setEditingTest(test);
     let datasetString = test.dataset;
@@ -165,10 +119,8 @@ export default function App() {
     setFormErrors({});
     setShowVariableInserter(false);
   };
-
   const handleSaveEdit = () => {
-    if (!editingTest) return;
-    if (!validateTestForm(editingFields)) return;
+    if (!editingTest || !validateTestForm(editingFields)) return;
     setTests(prev => prev.map(t => t.id === editingTest.id ? {
       ...t,
       description: editingFields.description.trim(),
@@ -176,16 +128,15 @@ export default function App() {
       dataset: editingFields.dataset.trim(),
       status: editingFields.status
     } : t));
-    setEditingTest(null);
-    setShowVariableInserter(false);
+    closeEditTestModal();
     toast.success(`Test ${editingTest.id} updated!`);
   };
-
   const handleQuickStatusChange = (testId, newStatus) => {
     setTests(prev => prev.map(t => t.id === testId ? { ...t, status: newStatus } : t));
     toast.success(`Status of test ${testId} changed to ${newStatus}.`);
   };
 
+  // --- Handlers DATASETS ---
   const handleOpenManageDataSets = () => {
     setShowManageDataSetsModal(true);
     setEditingDataSet(null);
@@ -222,8 +173,6 @@ export default function App() {
     setNewDataSet({ name: "", variables: [{ key: "", value: "" }] });
     toast.success('Global Data Set added!');
   };
-
-  // Conversion objet -> tableau pour édition
   const handleStartEditDataSet = (dataSet) => {
     let variablesArray = [];
     if (dataSet && dataSet.variables && typeof dataSet.variables === "object" && !Array.isArray(dataSet.variables)) {
@@ -233,7 +182,6 @@ export default function App() {
     setEditingDataSet({ id: dataSet.id, name: dataSet.name, variables: variablesArray });
     setNewDataSet({ name: "", variables: [{ key: "", value: "" }] });
   };
-  // Conversion tableau -> objet pour sauvegarde
   const handleSaveEditingDataSet = () => {
     if (!editingDataSet || !editingDataSet.name.trim()) { alert("Data Set name is required."); return; }
     const finalVariables = {};
@@ -242,7 +190,6 @@ export default function App() {
     setEditingDataSet(null);
     toast.success('Global Data Set updated!');
   };
-
   const handleDeleteDataSet = (dataSetId) => {
     if (window.confirm(`Are you sure you want to delete this Data Set?`)) {
       setGlobalDataSets(prev => prev.filter(ds => ds.id !== dataSetId));
@@ -251,6 +198,7 @@ export default function App() {
     }
   };
 
+  // --- Variable Inserter ---
   const allGlobalVariablesList = useMemo(() => {
     const varList = [];
     const seenKeys = new Set();
@@ -261,7 +209,6 @@ export default function App() {
     });
     return varList.sort((a, b) => a.key.localeCompare(b.key));
   }, [globalDataSets]);
-
   const insertVariableIntoTestDataset = (variableName) => {
     const textarea = showAddModal ? addDatasetTextareaRef.current : (editingTest ? editDatasetTextareaRef.current : null);
     if (textarea) {
@@ -291,6 +238,7 @@ export default function App() {
           <button className="btn-add-header" onClick={() => { setShowAddModal(true); setShowVariableInserter(false); setFormErrors({}); }} style={{ marginLeft: '10px' }}>+ Add test</button>
         </div>
       </div>
+
       <div className="table-wrapper">
         <table className="styled-table">
           <thead>
@@ -317,71 +265,70 @@ export default function App() {
           </tbody>
         </table>
       </div>
-      {showAddModal && (
-        <div className="modal-overlay" onClick={closeAddTestModal}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="addTestTitle">
-            <h2 className="modal-title" id="addTestTitle">Add a new test</h2>
-            <form className="form-layout" onSubmit={e => { e.preventDefault(); handleAddTest(); }}>
-              <div className="form-field">
-                <input className={`input ${formErrors.description ? 'input-error' : ''}`} placeholder="Description (required)" value={newTest.description} onChange={e => setNewTest({ ...newTest, description: e.target.value })} />
-                {formErrors.description && <small className="error-message">{formErrors.description}</small>}
-              </div>
-              <div className="form-field">
-                <input className={`input ${formErrors.expectedData ? 'input-error' : ''}`} placeholder="Expected data (required)" value={newTest.expectedData} onChange={e => setNewTest({ ...newTest, expectedData: e.target.value })} />
-                {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
-              </div>
-              <div className="form-field dataset-field-wrapper">
-                <label htmlFor="newTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
-                <textarea id="newTestDataset" className={`input ${formErrors.dataset ? 'input-error' : ''}`} placeholder='e.g., {"user": "{{default_username}}"}' value={newTest.dataset} onChange={e => setNewTest({ ...newTest, dataset: e.target.value })} rows={5} ref={addDatasetTextareaRef} />
-                {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
-                <button type="button" className="btn-insert-variable" onClick={e => { variableInserterTargetRef.current = e.target; setShowVariableInserter(prev => !prev); }}>{'{ Insert Variable {'}</button>
-              </div>
-              <select className="select-input" value={newTest.status} onChange={e => setNewTest({ ...newTest, status: e.target.value })}>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select>
-              <div className="modal-actions">
-                <button className="btn-add" type="submit">+ Add Test</button>
-                <button type="button" className="btn-cancel" onClick={closeAddTestModal}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {editingTest && (
-        <div className="modal-overlay" onClick={closeEditTestModal}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby={`editTestTitle-${editingTest.id}`}>
-            <h2 className="modal-title" id={`editTestTitle-${editingTest.id}`}>Edit test {editingTest.id}</h2>
-            <form className="form-layout" onSubmit={e => { e.preventDefault(); handleSaveEdit(); }}>
-              <div className="form-field">
-                <input className={`input ${formErrors.description ? 'input-error' : ''}`} placeholder="Description (required)" value={editingFields.description} onChange={e => setEditingFields({ ...editingFields, description: e.target.value })} />
-                {formErrors.description && <small className="error-message">{formErrors.description}</small>}
-              </div>
-              <div className="form-field">
-                <input className={`input ${formErrors.expectedData ? 'input-error' : ''}`} placeholder="Expected data (required)" value={editingFields.expectedData} onChange={e => setEditingFields({ ...editingFields, expectedData: e.target.value })} />
-                {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
-              </div>
-              <div className="form-field dataset-field-wrapper">
-                <label htmlFor="editTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
-                <textarea id="editTestDataset" className={`input ${formErrors.dataset ? 'input-error' : ''}`} placeholder='e.g., {"user": "{{default_username}}"}' value={editingFields.dataset} onChange={e => setEditingFields({ ...editingFields, dataset: e.target.value })} rows={5} ref={editDatasetTextareaRef} />
-                {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
-                <button type="button" className="btn-insert-variable" onClick={e => { variableInserterTargetRef.current = e.target; setShowVariableInserter(prev => !prev); }}>{'{ Insert Variable {'}</button>
-              </div>
-              <select className="select-input" value={editingFields.status} onChange={e => setEditingFields({ ...editingFields, status: e.target.value })}>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select>
-              <div className="modal-actions">
-                <button className="btn-add" type="submit">Save Changes</button>
-                <button type="button" className="btn-cancel" onClick={closeEditTestModal}>Cancel</button>
-              </div>
-            </form>
+      {/* MODALS */}
+      <Modal isOpen={showAddModal} onClose={closeAddTestModal} title="Add a new test">
+        <form className="form-layout" onSubmit={e => { e.preventDefault(); handleAddTest(); }}>
+          <div className="form-field">
+            <input className={`input ${formErrors.description ? 'input-error' : ''}`} placeholder="Description (required)" value={newTest.description} onChange={e => setNewTest({ ...newTest, description: e.target.value })} />
+            {formErrors.description && <small className="error-message">{formErrors.description}</small>}
           </div>
-        </div>
-      )}
+          <div className="form-field">
+            <input className={`input ${formErrors.expectedData ? 'input-error' : ''}`} placeholder="Expected data (required)" value={newTest.expectedData} onChange={e => setNewTest({ ...newTest, expectedData: e.target.value })} />
+            {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
+          </div>
+          <div className="form-field dataset-field-wrapper">
+            <label htmlFor="newTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
+            <textarea id="newTestDataset" className={`input ${formErrors.dataset ? 'input-error' : ''}`} placeholder='e.g., {"user": "{{default_username}}"}' value={newTest.dataset} onChange={e => setNewTest({ ...newTest, dataset: e.target.value })} rows={5} ref={addDatasetTextareaRef} />
+            {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
+            <button type="button" className="btn-insert-variable" onClick={e => { variableInserterTargetRef.current = e.target; setShowVariableInserter(prev => !prev); }}>{'{ Insert Variable {'}</button>
+          </div>
+          <select className="select-input" value={newTest.status} onChange={e => setNewTest({ ...newTest, status: e.target.value })}>
+            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <div className="modal-actions">
+            <button className="btn-add" type="submit">+ Add Test</button>
+            <button type="button" className="btn-cancel" onClick={closeAddTestModal}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={!!editingTest} onClose={closeEditTestModal} title={editingTest ? `Edit test ${editingTest.id}` : "Edit Test"}>
+        {editingTest && (
+          <form className="form-layout" onSubmit={e => { e.preventDefault(); handleSaveEdit(); }}>
+            <div className="form-field">
+              <input className={`input ${formErrors.description ? 'input-error' : ''}`} placeholder="Description (required)" value={editingFields.description} onChange={e => setEditingFields({ ...editingFields, description: e.target.value })} />
+              {formErrors.description && <small className="error-message">{formErrors.description}</small>}
+            </div>
+            <div className="form-field">
+              <input className={`input ${formErrors.expectedData ? 'input-error' : ''}`} placeholder="Expected data (required)" value={editingFields.expectedData} onChange={e => setEditingFields({ ...editingFields, expectedData: e.target.value })} />
+              {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
+            </div>
+            <div className="form-field dataset-field-wrapper">
+              <label htmlFor="editTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
+              <textarea id="editTestDataset" className={`input ${formErrors.dataset ? 'input-error' : ''}`} placeholder='e.g., {"user": "{{default_username}}"}' value={editingFields.dataset} onChange={e => setEditingFields({ ...editingFields, dataset: e.target.value })} rows={5} ref={editDatasetTextareaRef} />
+              {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
+              <button type="button" className="btn-insert-variable" onClick={e => { variableInserterTargetRef.current = e.target; setShowVariableInserter(prev => !prev); }}>{'{ Insert Variable {'}</button>
+            </div>
+            <select className="select-input" value={editingFields.status} onChange={e => setEditingFields({ ...editingFields, status: e.target.value })}>
+              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <div className="modal-actions">
+              <button className="btn-add" type="submit">Save Changes</button>
+              <button type="button" className="btn-cancel" onClick={closeEditTestModal}>Cancel</button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {showVariableInserter && variableInserterTargetRef.current && (
-        <div className="variable-inserter-popover"
+        <div
+          className="variable-inserter-popover"
           style={{
             position: 'absolute',
             top: variableInserterTargetRef.current.getBoundingClientRect().bottom + window.scrollY + 5,
             left: variableInserterTargetRef.current.getBoundingClientRect().left + window.scrollX,
-            zIndex: 50
+            zIndex: 1060
           }}
           ref={variableInserterPopoverRef}
         >
@@ -397,96 +344,67 @@ export default function App() {
         </div>
       )}
 
-      {showDeleteConfirm && (
-        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} role="alertdialog" aria-modal="true" aria-labelledby="deleteConfirmTitle" aria-describedby="deleteConfirmDesc">
-            <h2 className="modal-title" id="deleteConfirmTitle">Confirm Deletion</h2>
+      <Modal isOpen={!!showDeleteConfirm} onClose={() => setShowDeleteConfirm(null)} title="Confirm Deletion" size="sm">
+        {showDeleteConfirm && (
+          <>
             <p id="deleteConfirmDesc">
               Are you sure you want to delete test <strong>{showDeleteConfirm.id}: {showDeleteConfirm.description}</strong>? This action cannot be undone.
             </p>
             <div className="modal-actions centered">
-              <button className="btn-delete" onClick={confirmDeleteTest} style={{ backgroundColor: '#ffe3e3' }}>Yes, Delete</button>
-              <button type="button" className="btn-cancel" onClick={() => setShowDeleteConfirm(null)} style={{ color: '#555', fontWeight: 'normal', border: '1px solid #ccc' }}>Cancel</button>
+              <button className="btn-delete" onClick={confirmDeleteTest}>Yes, Delete</button>
+              <button type="button" className="btn-cancel btn-cancel-delete-confirm" onClick={() => setShowDeleteConfirm(null)}>Cancel</button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      <Modal isOpen={showManageDataSetsModal} onClose={() => setShowManageDataSetsModal(false)} title="Manage Global Data Sets" size="lg">
+        {editingDataSet ? (
+          <div className="dataset-editor-form">
+            <h3>Editing: {editingDataSet.name}</h3>
+            <div className="form-field"><label htmlFor="editDsName">Data Set Name:</label><input type="text" id="editDsName" className="input" value={editingDataSet.name} onChange={e => setEditingDataSet(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g., Staging Environment" required /></div>
+            <h4>Variables:</h4>
+            {editingDataSet.variables && Array.isArray(editingDataSet.variables) && editingDataSet.variables.map((variable, index) => (<div key={`edit-var-${index}`} className="variable-entry"><input type="text" className="input" value={variable.key} onChange={e => handleDataSetVariableChange(editingDataSet.id, index, 'key', e.target.value)} placeholder="Variable Key (e.g., username)" /><span className="variable-separator">:</span><input type="text" className="input" value={variable.value} onChange={e => handleDataSetVariableChange(editingDataSet.id, index, 'value', e.target.value)} placeholder="Variable Value" /><button type="button" className="btn-remove-variable" title="Remove variable" onClick={() => handleRemoveVariableFromDsForm(editingDataSet.id, index)}>×</button></div>))}
+            <button type="button" className="btn-add-variable" onClick={() => handleAddVariableToDsForm(editingDataSet.id)}>+ Add Variable</button>
+            <div className="modal-actions">
+              <button className="btn-save" onClick={handleSaveEditingDataSet}>Save Changes</button>
+              <button type="button" className="btn-cancel" onClick={() => setEditingDataSet(null)}>Cancel Edit</button>
             </div>
           </div>
-        </div>
-      )}
-
-      {showManageDataSetsModal && (
-        <div className="modal-overlay" onClick={() => setShowManageDataSetsModal(false)}>
-          <div className="modal-content modal-lg" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="manageDataSetsTitle">
-            <h2 className="modal-title" id="manageDataSetsTitle">Manage Global Data Sets</h2>
-            {editingDataSet ? (
-              <div className="dataset-editor-form">
-                <h3>Editing: {editingDataSet.name}</h3>
-                <div className="form-field">
-                  <label htmlFor="editDsName">Data Set Name:</label>
-                  <input type="text" id="editDsName" className="input" value={editingDataSet.name} onChange={e => setEditingDataSet(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g., Staging Environment" required />
-                </div>
-                <h4>Variables:</h4>
-                {editingDataSet.variables && Array.isArray(editingDataSet.variables) && editingDataSet.variables.map((variable, index) => (
-                  <div key={`edit-var-${index}`} className="variable-entry">
-                    <input type="text" className="input" value={variable.key} onChange={e => handleDataSetVariableChange(editingDataSet.id, index, 'key', e.target.value)} placeholder="Variable Key (e.g., username)" />
-                    <span className="variable-separator">:</span>
-                    <input type="text" className="input" value={variable.value} onChange={e => handleDataSetVariableChange(editingDataSet.id, index, 'value', e.target.value)} placeholder="Variable Value" />
-                    <button type="button" className="btn-remove-variable" title="Remove variable" onClick={() => handleRemoveVariableFromDsForm(editingDataSet.id, index)}>×</button>
-                  </div>
-                ))}
-                <button type="button" className="btn-add-variable" onClick={() => handleAddVariableToDsForm(editingDataSet.id)}>+ Add Variable</button>
-                <div className="modal-actions">
-                  <button className="btn-add" onClick={handleSaveEditingDataSet}>Save Changes</button>
-                  <button type="button" className="btn-cancel" onClick={() => setEditingDataSet(null)}>Cancel Edit</button>
-                </div>
-              </div>
-            ) : (
-              <div className="dataset-editor-form">
-                <h3>Add New Data Set</h3>
-                <div className="form-field">
-                  <label htmlFor="newDsName">Data Set Name:</label>
-                  <input type="text" id="newDsName" className="input" value={newDataSet.name} onChange={e => setNewDataSet(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g., Production Users" required />
-                </div>
-                <h4>Variables:</h4>
-                {newDataSet.variables && Array.isArray(newDataSet.variables) && newDataSet.variables.map((variable, index) => (
-                  <div key={`new-var-${index}`} className="variable-entry">
-                    <input type="text" className="input" value={variable.key} onChange={e => handleDataSetVariableChange('new', index, 'key', e.target.value)} placeholder="Variable Key" />
-                    <span className="variable-separator">:</span>
-                    <input type="text" className="input" value={variable.value} onChange={e => handleDataSetVariableChange('new', index, 'value', e.target.value)} placeholder="Variable Value" />
-                    <button type="button" className="btn-remove-variable" title="Remove variable" onClick={() => handleRemoveVariableFromDsForm('new', index)}>×</button>
-                  </div>
-                ))}
-                <button type="button" className="btn-add-variable" onClick={() => handleAddVariableToDsForm('new')}>+ Add Variable</button>
-                <div className="modal-actions">
-                  <button className="btn-add" onClick={handleSaveNewDataSet}>Add Data Set</button>
-                </div>
-              </div>
-            )}
-            <hr className="separator-hr" />
-            <div className="datasets-list-container">
-              <h3>Existing Data Sets ({globalDataSets.length})</h3>
-              {globalDataSets.length === 0 ? (<p>No global data sets defined yet.</p>) : (
-                <ul className="datasets-list">
-                  {globalDataSets.map(ds => (
-                    <li key={ds.id} className="dataset-list-item">
-                      <div className="dataset-info">
-                        <strong>{ds.name}</strong>
-                        <span className="variable-count">({Object.keys(ds.variables).length} variables)</span>
-                      </div>
-                      <div className="dataset-actions">
-                        <button className="btn-edit-sm" onClick={() => handleStartEditDataSet(ds)}>Edit</button>
-                        <button className="btn-delete-sm" onClick={() => handleDeleteDataSet(ds.id)}>Delete</button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="modal-actions" style={{ marginTop: '20px', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn-cancel" onClick={() => setShowManageDataSetsModal(false)}>Close</button>
+        ) : (
+          <div className="dataset-editor-form">
+            <h3>Add New Data Set</h3>
+            <div className="form-field"><label htmlFor="newDsName">Data Set Name:</label><input type="text" id="newDsName" className="input" value={newDataSet.name} onChange={e => setNewDataSet(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g., Production Users" required /></div>
+            <h4>Variables:</h4>
+            {newDataSet.variables && Array.isArray(newDataSet.variables) && newDataSet.variables.map((variable, index) => (<div key={`new-var-${index}`} className="variable-entry"><input type="text" className="input" value={variable.key} onChange={e => handleDataSetVariableChange('new', index, 'key', e.target.value)} placeholder="Variable Key" /><span className="variable-separator">:</span><input type="text" className="input" value={variable.value} onChange={e => handleDataSetVariableChange('new', index, 'value', e.target.value)} placeholder="Variable Value" /><button type="button" className="btn-remove-variable" title="Remove variable" onClick={() => handleRemoveVariableFromDsForm('new', index)}>×</button></div>))}
+            <button type="button" className="btn-add-variable" onClick={() => handleAddVariableToDsForm('new')}>+ Add Variable</button>
+            <div className="modal-actions">
+              <button className="btn-add" onClick={handleSaveNewDataSet}>Add Data Set</button>
             </div>
           </div>
+        )}
+        <hr className="separator-hr" />
+        <div className="datasets-list-container">
+          <h3>Existing Data Sets ({globalDataSets.length})</h3>
+          {globalDataSets.length === 0 ? (<p>No global data sets defined yet.</p>) : (
+            <ul className="datasets-list">
+              {globalDataSets.map(ds => (
+                <li key={ds.id} className="dataset-list-item">
+                  <div className="dataset-info"><strong>{ds.name}</strong><span className="variable-count">({Object.keys(ds.variables).length} variables)</span></div>
+                  <div className="dataset-actions">
+                    {/* Utilise texte si tu n’as pas les icônes */}
+                    <button className="btn-edit-sm" onClick={() => handleStartEditDataSet(ds)}>Edit</button>
+                    <button className="btn-delete-sm" onClick={() => handleDeleteDataSet(ds.id)}>Delete</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      )}
-
+        <div className="modal-actions" style={{ marginTop: '20px', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn-cancel" onClick={() => setShowManageDataSetsModal(false)}>Close</button>
+        </div>
+      </Modal>
     </main>
   );
 }
