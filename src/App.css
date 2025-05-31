@@ -438,3 +438,236 @@ main {
   font-style: italic;
   font-size: 1.1rem;
 }
+
+/* Styles for Manage Data Sets Modal and elements */
+.btn-header-manage-datasets {
+  background: #6c757d; /* A different color to distinguish */
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.08);
+  transition: background 0.17s, box-shadow 0.17s;
+}
+.btn-header-manage-datasets:hover {
+  background: #5a6268;
+  box-shadow: 0 4px 12px 0 rgba(0,0,0,0.12);
+}
+
+.modal-lg { /* For wider modals */
+  max-width: 900px !important;
+}
+
+.dataset-editor-form {
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  background-color: #fdfdfd;
+}
+.dataset-editor-form h3 {
+  margin-top: 0;
+  color: #333;
+  font-size: 1.2rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 8px;
+  margin-bottom: 15px;
+}
+.dataset-editor-form h4 {
+  margin-top: 15px;
+  margin-bottom: 10px;
+  color: #444;
+  font-size: 1rem;
+}
+
+.variable-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.variable-entry .input {
+  flex: 1;
+  margin-bottom: 0; /* Override default input margin if any */
+}
+.variable-separator {
+  font-weight: bold;
+}
+.btn-remove-variable {
+  background: none;
+  border: 1px solid #ffb8b8;
+  color: #e53e3e;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 1.2rem;
+  line-height: 1; /* Adjust for proper vertical centering of × */
+  padding:0; /* Reset padding */
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-remove-variable:hover {
+  background: #ffe5e5;
+  border-color: #e53e3e;
+}
+.btn-add-variable {
+  background: #e6f7ff;
+  border: 1px dashed #91d5ff;
+  color: #1890ff;
+  padding: 8px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-top: 5px;
+  display: inline-block; /* To not take full width */
+}
+.btn-add-variable:hover {
+  background: #d9f0ff;
+}
+
+.separator-hr {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 30px 0;
+}
+
+.datasets-list-container h3 {
+  font-size: 1.2rem;
+  color: #333;
+  margin-bottom: 10px;
+}
+.datasets-list {
+  list-style: none;
+  padding: 0;
+  max-height: 300px; /* Add scroll if many datasets */
+  overflow-y: auto;
+}
+.dataset-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #fff;
+}
+.dataset-list-item:last-child {
+  border-bottom: none;
+}
+.dataset-list-item:nth-child(even) {
+  background-color: #f9f9f9;
+}
+.dataset-info strong {
+  font-size: 1.05rem;
+  color: #2c3e50;
+}
+.variable-count {
+  font-size: 0.85rem;
+  color: #7f8c8d;
+  margin-left: 8px;
+}
+.dataset-actions .btn-edit-sm,
+.dataset-actions .btn-delete-sm {
+  padding: 5px 10px;
+  font-size: 0.9rem;
+  margin-left: 8px;
+  border-radius: 5px;
+}
+.btn-edit-sm {
+  border: 1px solid #a0c4ff;
+  color: #2577d8;
+  background: none;
+}
+.btn-edit-sm:hover {
+  background: #e9f3ff;
+}
+.btn-delete-sm {
+  border: 1px solid #ffc3c3;
+  color: #e13b2d;
+  background: none;
+}
+.btn-delete-sm:hover {
+  background: #ffe3e3;
+}
+
+/* Adjustments for labels inside form-field if you use them */
+.form-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+/* Ensure modal actions are well-spaced and aligned */
+.dataset-editor-form .modal-actions {
+  margin-top: 20px;
+  justify-content: flex-start; /* Align to start for forms */
+}
+
+/* Styles for Dataset field with Insert Variable button */
+.dataset-field-wrapper {
+  position: relative; /* Pour positionner le bouton ou le popover d'autosuggestion si besoin */
+  display: flex;
+  flex-direction: column; /* Mettre le label au-dessus */
+  gap: 4px;
+}
+.dataset-field-wrapper label { /* Style pour le label du champ dataset */
+  display: block;
+  margin-bottom: 0; /* Remplacé par le gap du wrapper */
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+.dataset-field-wrapper textarea {
+  min-height: 100px; /* Hauteur minimale pour le textarea */
+}
+.btn-insert-variable {
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 8px; /* Espace au-dessus du bouton */
+  align-self: flex-start; /* Pour ne pas prendre toute la largeur */
+  transition: background-color 0.2s;
+}
+.btn-insert-variable:hover {
+  background-color: #e0e0e0;
+}
+
+/* Styles for Variable Inserter Popover */
+.variable-inserter-popover {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  min-width: 250px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 5px 0;
+}
+.variable-inserter-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.variable-inserter-item:hover {
+  background-color: #e9f3ff; /* Même hover que les lignes de tableau */
+}
+.variable-inserter-item .variable-source-tag {
+  font-size: 0.8rem;
+  color: #777;
+  margin-left: 5px;
+}
+.variable-inserter-empty {
+  padding: 10px 12px;
+  color: #888;
+  font-style: italic;
+}
