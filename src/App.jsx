@@ -9,9 +9,6 @@ import Modal from './components/Modal';
 import MiniStats from './components/MiniStats';
 import TestTableRow from './components/TestTableRow';
 
-// Si tu utilises Heroicons (npm i @heroicons/react)
-// import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
-
 export default function App() {
   // --- États principaux ---
   const [tests, setTests] = useState(() => {
@@ -267,7 +264,11 @@ export default function App() {
       </div>
 
       {/* MODALS */}
-      <Modal isOpen={showAddModal} onClose={closeAddTestModal} title="Add a new test">
+      <Modal
+        isOpen={showAddModal}
+        onClose={closeAddTestModal}
+        title="Add a new test"
+      >
         <form className="form-layout" onSubmit={e => { e.preventDefault(); handleAddTest(); }}>
           <div className="form-field">
             <input className={`input ${formErrors.description ? 'input-error' : ''}`} placeholder="Description (required)" value={newTest.description} onChange={e => setNewTest({ ...newTest, description: e.target.value })} />
@@ -279,7 +280,14 @@ export default function App() {
           </div>
           <div className="form-field dataset-field-wrapper">
             <label htmlFor="editTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
-            <textarea id="editTestDataset" />
+            <textarea
+              id="editTestDataset"
+              ref={addDatasetTextareaRef}
+              className={`input ${formErrors.dataset ? 'input-error' : ''}`}
+              value={newTest.dataset}
+              onChange={e => setNewTest({ ...newTest, dataset: e.target.value })}
+            />
+            {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
             <button
               type="button"
               className="btn-insert-variable"
@@ -301,7 +309,11 @@ export default function App() {
         </form>
       </Modal>
 
-      <Modal isOpen={!!editingTest} onClose={closeEditTestModal} title={editingTest ? `Edit test ${editingTest.id}` : "Edit Test"}>
+      <Modal
+        isOpen={!!editingTest}
+        onClose={closeEditTestModal}
+        title={editingTest ? `Edit test ${editingTest.id}` : "Edit Test"}
+      >
         {editingTest && (
           <form className="form-layout" onSubmit={e => { e.preventDefault(); handleSaveEdit(); }}>
             <div className="form-field">
@@ -314,7 +326,15 @@ export default function App() {
             </div>
             <div className="form-field dataset-field-wrapper">
               <label htmlFor="editTestDataset">Dataset (JSON with {'{{variables}}'}):</label>
-              <textarea id="editTestDataset" />
+              <textarea
+                id="editTestDataset"
+                ref={editDatasetTextareaRef}
+                className={`input ${formErrors.dataset ? 'input-error' : ''}`}
+                value={editingFields.dataset}
+                onChange={e => setEditingFields({ ...editingFields, dataset: e.target.value })}
+              />
+              {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
+
               <button
                 type="button"
                 className="btn-insert-variable"
@@ -408,7 +428,6 @@ export default function App() {
                 <li key={ds.id} className="dataset-list-item">
                   <div className="dataset-info"><strong>{ds.name}</strong><span className="variable-count">({Object.keys(ds.variables).length} variables)</span></div>
                   <div className="dataset-actions">
-                    {/* Utilise texte si tu n’as pas les icônes */}
                     <button className="btn-edit-sm" onClick={() => handleStartEditDataSet(ds)}>Edit</button>
                     <button className="btn-delete-sm" onClick={() => handleDeleteDataSet(ds.id)}>Delete</button>
                   </div>
