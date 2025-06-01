@@ -1,5 +1,4 @@
-// src/components/TestTableRow.jsx
-import React, { useMemo } from 'react';
+import React from 'react';
 import StatusBadge from './StatusBadge';
 import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 
@@ -11,10 +10,16 @@ function TestTableRow({
   onDeleteTest,
   onQuickStatusChange
 }) {
-  const resolvedDatasetForDisplay = useMemo(
-    () => resolvePlaceholders(test.dataset, globalDataSets),
-    [test.dataset, globalDataSets, resolvePlaceholders]
-  );
+  // Helpers pour éviter le bug si resolvePlaceholders retourne un objet { error }
+  const getResolvedOrError = value => {
+    const result = resolvePlaceholders(value, globalDataSets);
+    // Vérifie si result est un objet, non null, et a une propriété 'error'
+    if (typeof result === "object" && result !== null && result.hasOwnProperty('error')) {
+      return <span style={{ color: "red", fontStyle: "italic" }}>Invalid: {result.error}</span>;
+    }
+    // React gère bien le rendu de chaînes, nombres, null, undefined (ces deux derniers ne rendent rien)
+    return result;
+  };
 
   return (
     <tr>
@@ -22,18 +27,15 @@ function TestTableRow({
       <td
         className="description-cell"
         onClick={() => onOpenEditModal(test)}
-        title="Edit this test's details (description, data, status, etc.)"
+        title="Click to edit this test's details" // Titre plus explicite pour l'action du clic
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onOpenEditModal(test)}
+        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onOpenEditModal(test)}
       >
-        {test.description}
+        {getResolvedOrError(test.description)}
       </td>
-      <td>{test.expectedData}</td>
       <td>
-        <pre className="json-cell">
-          {JSON.stringify(resolvedDatasetForDisplay, null, 2)}
-        </pre>
+        {getResolvedOrError(test.expectedData)}
       </td>
       <td>
         <StatusBadge
@@ -43,12 +45,12 @@ function TestTableRow({
         />
       </td>
       <td className="table-actions">
-        <div className="table-actions-inner">
+        <div className="table-actions-inner"> {/* Bon pour le layout des boutons */}
           <button
             type="button"
             className="btn-icon btn-edit-action"
             onClick={e => {
-              e.stopPropagation();
+              e.stopPropagation(); // Important pour éviter le déclenchement du onClick de la cellule
               onOpenEditModal(test);
             }}
             title="Edit Test Case"
@@ -60,7 +62,7 @@ function TestTableRow({
             type="button"
             className="btn-icon btn-delete-action"
             onClick={e => {
-              e.stopPropagation();
+              e.stopPropagation(); // Important
               onDeleteTest(test);
             }}
             title="Delete Test Case"
@@ -74,4 +76,6 @@ function TestTableRow({
   );
 }
 
-export default TestTableRow;
+// Envisagez React.memo pour optimiser les performances si la table est grande
+// ou si le parent se re-rend fréquemment.
+export default React.memo(TestTableRow);

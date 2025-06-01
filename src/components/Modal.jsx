@@ -1,45 +1,87 @@
 // src/components/Modal.jsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useId, useMemo } from 'react';
 import ReactDOM from 'react-dom';
+
+const FOCUSABLE_ELEMENTS_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 function Modal({ isOpen, onClose, title, children, size }) {
   const modalRef = useRef(null);
   const previousActiveElement = useRef(null);
 
-  // Gestion focus + ESC
+  const titleId = useMemo(() => { // Ou useId
+    if (!title) return undefined;
+    return `modal-title-${Math.random().toString(36).substring(2, 9)}`;
+  }, [title]);
+
+  // Stocker onClose dans une ref pour éviter de le mettre dans les dépendances de l'effet principal
+  const onCloseRef = useRef(onClose);
   useEffect(() => {
-    if (!isOpen) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      // La restauration du focus est gérée par la fonction de cleanup de l'effet précédent
+      return;
+    }
+
+    // *** Effet principal quand la modale s'ouvre ***
     previousActiveElement.current = document.activeElement;
+    const modalElement = modalRef.current;
+    if (!modalElement) return;
 
+    // Focus initial
+    const focusableElements = Array.from(modalElement.querySelectorAll(FOCUSABLE_ELEMENTS_SELECTOR));
+    const firstFocusableElement = focusableElements[0];
+    if (firstFocusableElement) {
+      firstFocusableElement.focus();
+    } else {
+      modalElement.focus();
+    }
+
+    // Listeners
     const handleEsc = (event) => {
       if (event.key === 'Escape') {
-        onClose();
+        onCloseRef.current(); // Utiliser la ref
+      }
+    };
+
+    const trapFocus = (event) => {
+      if (event.key !== 'Tab' || !modalElement) return;
+      const currentFocusableElements = Array.from(modalElement.querySelectorAll(FOCUSABLE_ELEMENTS_SELECTOR)); // Récupérer au moment de l'event
+      if (currentFocusableElements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const currentFirstFocusable = currentFocusableElements[0];
+      const currentLastFocusable = currentFocusableElements[currentFocusableElements.length - 1];
+
+      if (event.shiftKey) {
+        if (document.activeElement === currentFirstFocusable) {
+          currentLastFocusable.focus();
+          event.preventDefault();
+        }
+      } else {
+        if (document.activeElement === currentLastFocusable) {
+          currentFirstFocusable.focus();
+          event.preventDefault();
+        }
       }
     };
 
     document.addEventListener('keydown', handleEsc);
+    document.addEventListener('keydown', trapFocus);
 
-    // Focus sur premier élément focusable, sinon la modale
-    const focusableElements = modalRef.current?.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusableElements && focusableElements.length > 0) {
-      focusableElements[0].focus();
-    } else {
-      modalRef.current?.focus();
-    }
-
-    // Cleanup
+    // Cleanup function: s'exécute quand isOpen devient false ou quand le composant est démonté
     return () => {
       document.removeEventListener('keydown', handleEsc);
-      if (previousActiveElement.current) {
+      document.removeEventListener('keydown', trapFocus);
+      if (previousActiveElement.current && document.body.contains(previousActiveElement.current)) {
         previousActiveElement.current.focus();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]); // L'effet ne dépend QUE de isOpen pour son exécution/nettoyage principal.
 
-  // Si non ouvert, rien à afficher
   if (!isOpen) {
     return null;
   }
@@ -48,14 +90,10 @@ function Modal({ isOpen, onClose, title, children, size }) {
   if (size === "lg") modalContentClass += " modal-lg";
   else if (size === "sm") modalContentClass += " modal-sm";
 
-  // Id pour aria-labelledby si title existe
-  const titleId = title ? `modal-title-${Math.random().toString(36).substr(2, 9)}` : undefined;
-
-  // Important: ajoutez la classe "active" quand isOpen est true !
   return ReactDOM.createPortal(
     <div
-      className={`modal-overlay${isOpen ? " active" : ""}`}
-      onClick={onClose}
+      className={`modal-overlay active`}
+      onClick={onClose} // Ici on peut utiliser onClose directement
       role="presentation"
     >
       <div

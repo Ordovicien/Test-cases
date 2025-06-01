@@ -1,8 +1,7 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from "react"; // Ajout de useCallback
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import toast, { Toaster } from 'react-hot-toast';
 import "./App.css";
 
-// IMPORTS MODULAIRES
 import { STATUSES, initialTests, initialGlobalDataSets } from './constants';
 import { generateNextId, generateGDSId, resolvePlaceholders } from './utils';
 import Modal from './components/Modal';
@@ -15,44 +14,56 @@ export default function App() {
     const saved = localStorage.getItem("cahierDeTests");
     try {
       const parsed = saved ? JSON.parse(saved) : initialTests;
-      // Assurer que dataset est toujours une chaîne dans l'état
-      return parsed.map(t => ({ ...t, dataset: typeof t.dataset === 'string' ? t.dataset : JSON.stringify(t.dataset ?? {}) }));
+      return parsed.map(t => ({
+        ...t,
+        dataset: undefined, // nettoyage, plus utilisé
+      }));
     } catch (e) {
-      console.error("Error parsing cahierDeTests from localStorage, resetting.", e);
       localStorage.removeItem('cahierDeTests');
-      return initialTests.map(t => ({ ...t, dataset: JSON.stringify(t.dataset ?? {}) }));
+      return initialTests.map(t => ({
+        ...t,
+        dataset: undefined,
+      }));
     }
   });
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newTest, setNewTest] = useState({ description: "", expectedData: "", dataset: "", status: "To do" });
+  const [newTest, setNewTest] = useState({ description: "", expectedData: "", status: "To do" });
   const [formErrors, setFormErrors] = useState({});
   const [editingTest, setEditingTest] = useState(null);
-  const [editingFields, setEditingFields] = useState({ description: "", expectedData: "", dataset: "", status: "To do" });
+  const [editingFields, setEditingFields] = useState({ description: "", expectedData: "", status: "To do" });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
+  // --- Gestion datasets globaux ---
   const [globalDataSets, setGlobalDataSets] = useState(() => {
     const saved = localStorage.getItem("globalDataSets");
     try { return saved ? JSON.parse(saved) : initialGlobalDataSets; }
     catch (e) {
-      console.error("Error parsing globalDataSets from localStorage, resetting.", e);
       localStorage.removeItem('globalDataSets'); return initialGlobalDataSets;
     }
   });
   const [showManageDataSetsModal, setShowManageDataSetsModal] = useState(false);
   const [editingDataSet, setEditingDataSet] = useState(null);
-  const [newDataSet, setNewDataSet] = useState({ name: "", variables: [{ key: "", value: "" }] });
 
-  const addDatasetTextareaRef = useRef(null);
-  const editDatasetTextareaRef = useRef(null);
+  // Nouveau dataset : variable avec id unique !
+  const [newDataSet, setNewDataSet] = useState({
+    name: "",
+    variables: [{ id: 'v' + Date.now() + Math.random(), key: "", value: "" }]
+  });
+
+  // -- Réfs pour autosuggest
+  const addDescRef = useRef(null);
+  const addExpRef = useRef(null);
+  const editDescRef = useRef(null);
+  const editExpRef = useRef(null);
+
   const [showVariableInserter, setShowVariableInserter] = useState(false);
-  const variableInserterTargetRef = useRef(null); // Référence au bouton qui ouvre le popover
-  const variableInserterPopoverRef = useRef(null); // Référence au popover lui-même
+  const [autoSuggestTarget, setAutoSuggestTarget] = useState(null);
+  const variableInserterPopoverRef = useRef(null);
 
-  // --- Effets pour persistance locale ---
+  // --- Persistance locale ---
   useEffect(() => {
     localStorage.setItem("cahierDeTests", JSON.stringify(tests));
   }, [tests]);
-
   useEffect(() => {
     localStorage.setItem("globalDataSets", JSON.stringify(globalDataSets));
   }, [globalDataSets]);
@@ -63,17 +74,15 @@ export default function App() {
       if (
         variableInserterPopoverRef.current &&
         !variableInserterPopoverRef.current.contains(event.target) &&
-        variableInserterTargetRef.current && // S'assurer que la cible existe toujours
-        !variableInserterTargetRef.current.contains(event.target)
+        autoSuggestTarget &&
+        !autoSuggestTarget.contains(event.target)
       ) {
         setShowVariableInserter(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [showVariableInserter]); // variableInserterTargetRef et variableInserterPopoverRef sont stables
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showVariableInserter, autoSuggestTarget]);
 
   // --- Statistiques rapides ---
   const totalTests = tests.length;
@@ -86,13 +95,6 @@ export default function App() {
     const errors = {};
     if (!testData.description.trim()) errors.description = "Description is required.";
     if (!testData.expectedData.trim()) errors.expectedData = "Expected Data is required.";
-    if (testData.dataset.trim()) {
-      try {
-        JSON.parse(testData.dataset);
-      } catch (error) {
-        errors.dataset = "Invalid JSON format.";
-      }
-    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -102,8 +104,8 @@ export default function App() {
     setShowAddModal(false);
     setShowVariableInserter(false);
     setFormErrors({});
-    setNewTest({ description: "", expectedData: "", dataset: "", status: "To do" });
-  }, []); // Les setters d'état sont stables
+    setNewTest({ description: "", expectedData: "", status: "To do" });
+  }, []);
 
   const handleAddTest = useCallback(() => {
     if (!validateTestForm(newTest)) return;
@@ -112,12 +114,11 @@ export default function App() {
       id,
       description: newTest.description.trim(),
       expectedData: newTest.expectedData.trim(),
-      dataset: newTest.dataset.trim() || "{}", // Assurer un JSON valide si vide
       status: newTest.status
     }]);
     closeAddTestModal();
     toast.success('Test added successfully!');
-  }, [newTest, tests, closeAddTestModal]); // validateTestForm n'est pas listé car non useCallback (ou alors le mettre en useCallback)
+  }, [newTest, tests, closeAddTestModal]);
 
   const handleDeleteTestConfirmation = useCallback((testToDelete) => {
     setShowDeleteConfirm(testToDelete);
@@ -139,25 +140,14 @@ export default function App() {
 
   const handleOpenEditModal = useCallback((test) => {
     setEditingTest(test);
-    let datasetString = test.dataset;
-    // Assurer que dataset est une chaîne pour le formulaire
-    if (typeof datasetString !== 'string') {
-      try {
-        datasetString = JSON.stringify(datasetString ?? {});
-      } catch {
-        datasetString = "{}"; // Fallback
-      }
-    }
     setEditingFields({
       description: test.description,
       expectedData: test.expectedData,
-      dataset: datasetString,
       status: test.status
     });
     setFormErrors({});
-    setShowVariableInserter(false); // Fermer au cas où il serait ouvert pour un autre modal
+    setShowVariableInserter(false);
   }, []);
-
 
   const handleSaveEdit = useCallback(() => {
     if (!editingTest || !validateTestForm(editingFields)) return;
@@ -165,31 +155,31 @@ export default function App() {
       ...t,
       description: editingFields.description.trim(),
       expectedData: editingFields.expectedData.trim(),
-      dataset: editingFields.dataset.trim() || "{}", // Assurer un JSON valide si vide
       status: editingFields.status
     } : t));
     closeEditTestModal();
     toast.success(`Test ${editingTest.id} updated!`);
-  }, [editingTest, editingFields, closeEditTestModal]); // validateTestForm
+  }, [editingTest, editingFields, closeEditTestModal]);
 
   const handleQuickStatusChange = useCallback((testId, newStatus) => {
     setTests(prev => prev.map(t => t.id === testId ? { ...t, status: newStatus } : t));
     toast.success(`Status of test ${testId} changed to ${newStatus}.`);
   }, []);
 
-  // --- Handlers DATASETS ---
+  // --- DATASETS handlers ---
   const handleOpenManageDataSets = useCallback(() => {
     setShowManageDataSetsModal(true);
-    setEditingDataSet(null); // S'assurer qu'on n'est pas en mode édition
-    setNewDataSet({ name: "", variables: [{ key: "", value: "" }] }); // Réinitialiser le formulaire d'ajout
+    setEditingDataSet(null);
+    setNewDataSet({
+      name: "",
+      variables: [{ id: 'v' + Date.now() + Math.random(), key: "", value: "" }]
+    });
   }, []);
 
   const handleDataSetVariableChange = useCallback((dataSetIdOrNew, varIndex, field, value) => {
     const targetStateSetter = dataSetIdOrNew === 'new' ? setNewDataSet : setEditingDataSet;
     targetStateSetter(prev => {
-      // Vérification pour s'assurer que 'prev' existe et est le bon dataset pour l'édition
       if (!prev || (dataSetIdOrNew !== 'new' && prev.id !== dataSetIdOrNew)) return prev;
-
       const updatedVars = [...prev.variables];
       updatedVars[varIndex] = { ...updatedVars[varIndex], [field]: value };
       return { ...prev, variables: updatedVars };
@@ -200,7 +190,13 @@ export default function App() {
     const targetStateSetter = dataSetIdOrNew === 'new' ? setNewDataSet : setEditingDataSet;
     targetStateSetter(prev => {
       if (!prev || (dataSetIdOrNew !== 'new' && prev.id !== dataSetIdOrNew)) return prev;
-      return { ...prev, variables: [...prev.variables, { key: "", value: "" }] };
+      return {
+        ...prev,
+        variables: [
+          ...prev.variables,
+          { id: 'v' + Date.now() + Math.random(), key: "", value: "" }
+        ]
+      };
     });
   }, []);
 
@@ -226,22 +222,30 @@ export default function App() {
       name: newDataSet.name.trim(),
       variables: finalVariables
     }]);
-    setNewDataSet({ name: "", variables: [{ key: "", value: "" }] }); // Reset form
+    setNewDataSet({
+      name: "",
+      variables: [{ id: 'v' + Date.now() + Math.random(), key: "", value: "" }]
+    });
     toast.success('Global Data Set added!');
   }, [newDataSet]);
 
   const handleStartEditDataSet = useCallback((dataSet) => {
     let variablesArray = [];
-    // Convertir l'objet variables en tableau pour le formulaire
     if (dataSet && dataSet.variables && typeof dataSet.variables === "object" && !Array.isArray(dataSet.variables)) {
-      variablesArray = Object.entries(dataSet.variables).map(([key, value]) => ({ key, value }));
+      variablesArray = Object.entries(dataSet.variables).map(([key, value]) => ({
+        id: 'v' + Date.now() + Math.random(),
+        key,
+        value
+      }));
     }
-    // S'assurer qu'il y a au moins un champ vide si pas de variables
     if (variablesArray.length === 0) {
-      variablesArray = [{ key: "", value: "" }];
+      variablesArray = [{ id: 'v' + Date.now() + Math.random(), key: "", value: "" }];
     }
     setEditingDataSet({ id: dataSet.id, name: dataSet.name, variables: variablesArray });
-    setNewDataSet({ name: "", variables: [{ key: "", value: "" }] }); // Réinitialiser le formulaire d'ajout pour éviter confusion
+    setNewDataSet({
+      name: "",
+      variables: [{ id: 'v' + Date.now() + Math.random(), key: "", value: "" }]
+    });
   }, []);
 
   const handleSaveEditingDataSet = useCallback(() => {
@@ -256,14 +260,13 @@ export default function App() {
     setGlobalDataSets(prev => prev.map(ds =>
       ds.id === editingDataSet.id ? { ...ds, name: editingDataSet.name.trim(), variables: finalVariables } : ds
     ));
-    setEditingDataSet(null); // Quitter le mode édition
+    setEditingDataSet(null);
     toast.success('Global Data Set updated!');
   }, [editingDataSet]);
 
   const handleDeleteDataSet = useCallback((dataSetId) => {
     if (window.confirm(`Are you sure you want to delete this Data Set? This could affect tests using its variables.`)) {
       setGlobalDataSets(prev => prev.filter(ds => ds.id !== dataSetId));
-      // Si le dataset supprimé était en cours d'édition, annuler l'édition
       if (editingDataSet && editingDataSet.id === dataSetId) {
         setEditingDataSet(null);
       }
@@ -271,12 +274,10 @@ export default function App() {
     }
   }, [editingDataSet]);
 
-
   // --- Variable Inserter ---
   const allGlobalVariablesList = useMemo(() => {
     const varList = [];
     const seenKeys = new Set();
-    // Parcourir en ordre inverse pour que les datasets "plus récents" ou "plus bas dans la liste UI" aient priorité
     [...globalDataSets].reverse().forEach(ds => {
       Object.keys(ds.variables).forEach(key => {
         if (!seenKeys.has(key)) {
@@ -285,37 +286,34 @@ export default function App() {
         }
       });
     });
-    return varList.sort((a, b) => a.key.localeCompare(b.key)); // Trier alphabétiquement pour l'affichage
+    return varList.sort((a, b) => a.key.localeCompare(b.key));
   }, [globalDataSets]);
 
-  const insertVariableIntoTestDataset = useCallback((variableName) => {
-    const textarea = showAddModal ? addDatasetTextareaRef.current : (editingTest ? editDatasetTextareaRef.current : null);
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const text = textarea.value;
+  const insertVariableAtCursor = (target, updateFunc) => variableName => {
+    if (target) {
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const text = target.value;
       const placeholder = `{{${variableName}}}`;
       const newText = text.substring(0, start) + placeholder + text.substring(end);
-
-      const activeStateSetter = showAddModal ? setNewTest : (editingTest ? setEditingFields : null);
-      if (activeStateSetter) {
-        activeStateSetter(prev => ({ ...prev, dataset: newText }));
-      }
-      // Refocus and set cursor position after state update and re-render
+      updateFunc(newText);
+      setShowVariableInserter(false);
       setTimeout(() => {
-        textarea.focus();
-        textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
+        target.focus();
+        target.selectionStart = target.selectionEnd = start + placeholder.length;
       }, 0);
     }
-    setShowVariableInserter(false);
-  }, [showAddModal, editingTest]); // addDatasetTextareaRef, editDatasetTextareaRef sont stables
-
+  };
 
   return (
     <main>
       <Toaster position="top-right" reverseOrder={false} />
       <div className="page-header">
-        <h1 className="title"><span role="img" aria-label="test document">📝</span><span role="img" aria-label="test tube">🧪</span> Interactive Test Book</h1>
+        <h1 className="title">
+          <span role="img" aria-label="test document">📝</span>
+          <span role="img" aria-label="test tube">🧪</span>
+          Interactive Test Book
+        </h1>
         <MiniStats total={totalTests} todo={todoTests} done={doneTests} failed={failedTests} />
         <div>
           <button className="btn-header-manage-datasets" onClick={handleOpenManageDataSets}>⚙️ Manage Data Sets</button>
@@ -323,7 +321,7 @@ export default function App() {
             className="btn-add-header"
             onClick={() => {
               setShowAddModal(true);
-              setNewTest({ description: "", expectedData: "", dataset: "", status: "To do" }); // Reset form
+              setNewTest({ description: "", expectedData: "", status: "To do" });
               setFormErrors({});
               setShowVariableInserter(false);
             }}
@@ -337,12 +335,18 @@ export default function App() {
       <div className="table-wrapper">
         <table className="styled-table">
           <thead>
-            <tr><th>ID</th><th>Description</th><th>Expected data</th><th>Dataset</th><th>Status</th><th>Actions</th></tr>
+            <tr>
+              <th>ID</th>
+              <th>Description</th>
+              <th>Expected data</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
           </thead>
           <tbody>
             {tests.length === 0 ? (
               <tr>
-                <td colSpan="6" className="empty-table-message">No tests yet. Click "+ Add test" to begin.</td>
+                <td colSpan="5" className="empty-table-message">No tests yet. Click "+ Add test" to begin.</td>
               </tr>
             ) : (
               tests.map((test) => (
@@ -370,30 +374,60 @@ export default function App() {
         <form className="form-layout" onSubmit={e => { e.preventDefault(); handleAddTest(); }}>
           <div className="form-field">
             <label htmlFor="addTestDescription">Description:</label>
-            <input id="addTestDescription" className={`input ${formErrors.description ? 'input-error' : ''}`} placeholder="Description (required)" value={newTest.description} onChange={e => setNewTest({ ...newTest, description: e.target.value })} />
-            {formErrors.description && <small className="error-message">{formErrors.description}</small>}
-          </div>
-          <div className="form-field">
-            <label htmlFor="addTestExpectedData">Expected Data:</label>
-            <input id="addTestExpectedData" className={`input ${formErrors.expectedData ? 'input-error' : ''}`} placeholder="Expected data (required)" value={newTest.expectedData} onChange={e => setNewTest({ ...newTest, expectedData: e.target.value })} />
-            {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
-          </div>
-          <div className="form-field dataset-field-wrapper">
-            <label htmlFor="addTestDatasetTextarea">Dataset (JSON or use {'{{variables}}'}):</label>
-            <textarea
-              id="addTestDatasetTextarea" 
-              ref={addDatasetTextareaRef}
-              className={`input ${formErrors.dataset ? 'input-error' : ''}`}
-              placeholder='e.g., {"userId": "{{defaultUserId}}", "isValid": true}'
-              value={newTest.dataset}
-              onChange={e => setNewTest({ ...newTest, dataset: e.target.value })}
+            <input
+              id="addTestDescription"
+              ref={addDescRef}
+              className={`input ${formErrors.description ? 'input-error' : ''}`}
+              placeholder="Description (required) – type {{ to insert a variable"
+              value={newTest.description}
+              onChange={e => setNewTest({ ...newTest, description: e.target.value })}
+              onKeyUp={e => {
+                if (
+                  e.key === '{' &&
+                  newTest.description.slice(e.target.selectionStart - 2, e.target.selectionStart) === '{{'
+                ) {
+                  setAutoSuggestTarget(addDescRef.current);
+                  setShowVariableInserter(true);
+                }
+              }}
             />
-            {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
+            {formErrors.description && <small className="error-message">{formErrors.description}</small>}
             <button
               type="button"
               className="btn-insert-variable"
               onClick={e => {
-                variableInserterTargetRef.current = e.target; // Sauvegarder la référence du bouton cliqué
+                setAutoSuggestTarget(addDescRef.current);
+                setShowVariableInserter(prev => !prev);
+              }}
+            >
+              {'{{}} Insert Variable'}
+            </button>
+          </div>
+          <div className="form-field">
+            <label htmlFor="addTestExpectedData">Expected Data:</label>
+            <input
+              id="addTestExpectedData"
+              ref={addExpRef}
+              className={`input ${formErrors.expectedData ? 'input-error' : ''}`}
+              placeholder="Expected data (required) – type {{ to insert a variable"
+              value={newTest.expectedData}
+              onChange={e => setNewTest({ ...newTest, expectedData: e.target.value })}
+              onKeyUp={e => {
+                if (
+                  e.key === '{' &&
+                  newTest.expectedData.slice(e.target.selectionStart - 2, e.target.selectionStart) === '{{'
+                ) {
+                  setAutoSuggestTarget(addExpRef.current);
+                  setShowVariableInserter(true);
+                }
+              }}
+            />
+            {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
+            <button
+              type="button"
+              className="btn-insert-variable"
+              onClick={e => {
+                setAutoSuggestTarget(addExpRef.current);
                 setShowVariableInserter(prev => !prev);
               }}
             >
@@ -420,30 +454,60 @@ export default function App() {
           <form className="form-layout" onSubmit={e => { e.preventDefault(); handleSaveEdit(); }}>
             <div className="form-field">
               <label htmlFor="editTestDescription">Description:</label>
-              <input id="editTestDescription" className={`input ${formErrors.description ? 'input-error' : ''}`} placeholder="Description (required)" value={editingFields.description} onChange={e => setEditingFields({ ...editingFields, description: e.target.value })} />
-              {formErrors.description && <small className="error-message">{formErrors.description}</small>}
-            </div>
-            <div className="form-field">
-              <label htmlFor="editTestExpectedData">Expected Data:</label>
-              <input id="editTestExpectedData" className={`input ${formErrors.expectedData ? 'input-error' : ''}`} placeholder="Expected data (required)" value={editingFields.expectedData} onChange={e => setEditingFields({ ...editingFields, expectedData: e.target.value })} />
-              {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
-            </div>
-            <div className="form-field dataset-field-wrapper">
-              <label htmlFor="editTestDatasetTextarea">Dataset (JSON or use {'{{variables}}'}):</label>
-              <textarea
-                id="editTestDatasetTextarea"
-                ref={editDatasetTextareaRef}
-                className={`input ${formErrors.dataset ? 'input-error' : ''}`}
-                placeholder='e.g., {"userId": "{{defaultUserId}}", "isValid": true}'
-                value={editingFields.dataset}
-                onChange={e => setEditingFields({ ...editingFields, dataset: e.target.value })}
+              <input
+                id="editTestDescription"
+                ref={editDescRef}
+                className={`input ${formErrors.description ? 'input-error' : ''}`}
+                placeholder="Description (required) – type {{ to insert a variable"
+                value={editingFields.description}
+                onChange={e => setEditingFields({ ...editingFields, description: e.target.value })}
+                onKeyUp={e => {
+                  if (
+                    e.key === '{' &&
+                    editingFields.description.slice(e.target.selectionStart - 2, e.target.selectionStart) === '{{'
+                  ) {
+                    setAutoSuggestTarget(editDescRef.current);
+                    setShowVariableInserter(true);
+                  }
+                }}
               />
-              {formErrors.dataset && <small className="error-message">{formErrors.dataset}</small>}
+              {formErrors.description && <small className="error-message">{formErrors.description}</small>}
               <button
                 type="button"
                 className="btn-insert-variable"
                 onClick={e => {
-                  variableInserterTargetRef.current = e.target;
+                  setAutoSuggestTarget(editDescRef.current);
+                  setShowVariableInserter(prev => !prev);
+                }}
+              >
+                {'{{}} Insert Variable'}
+              </button>
+            </div>
+            <div className="form-field">
+              <label htmlFor="editTestExpectedData">Expected Data:</label>
+              <input
+                id="editTestExpectedData"
+                ref={editExpRef}
+                className={`input ${formErrors.expectedData ? 'input-error' : ''}`}
+                placeholder="Expected data (required) – type {{ to insert a variable"
+                value={editingFields.expectedData}
+                onChange={e => setEditingFields({ ...editingFields, expectedData: e.target.value })}
+                onKeyUp={e => {
+                  if (
+                    e.key === '{' &&
+                    editingFields.expectedData.slice(e.target.selectionStart - 2, e.target.selectionStart) === '{{'
+                  ) {
+                    setAutoSuggestTarget(editExpRef.current);
+                    setShowVariableInserter(true);
+                  }
+                }}
+              />
+              {formErrors.expectedData && <small className="error-message">{formErrors.expectedData}</small>}
+              <button
+                type="button"
+                className="btn-insert-variable"
+                onClick={e => {
+                  setAutoSuggestTarget(editExpRef.current);
                   setShowVariableInserter(prev => !prev);
                 }}
               >
@@ -462,23 +526,34 @@ export default function App() {
         )}
       </Modal>
 
-      {showVariableInserter && variableInserterTargetRef.current && (
+      {/* Variable Inserter Popover */}
+      {showVariableInserter && autoSuggestTarget && (
         <div
           className="variable-inserter-popover"
           style={{
             position: 'absolute',
-            top: variableInserterTargetRef.current.getBoundingClientRect().bottom + window.scrollY + 5, // +5 pour un petit espace
-            left: variableInserterTargetRef.current.getBoundingClientRect().left + window.scrollX,
-            zIndex: 1060 // S'assurer qu'il est au-dessus des autres éléments du modal (typiquement z-index 1050 pour les modals)
+            top: autoSuggestTarget.getBoundingClientRect().bottom + window.scrollY + 5,
+            left: autoSuggestTarget.getBoundingClientRect().left + window.scrollX,
+            zIndex: 1060
           }}
-          ref={variableInserterPopoverRef} // Attacher la ref au popover lui-même
+          ref={variableInserterPopoverRef}
         >
           {allGlobalVariablesList.length > 0 ? (
             allGlobalVariablesList.map(variable => (
               <div
-                key={`${variable.source}-${variable.key}`} // Clé plus unique
+                key={`${variable.source}-${variable.key}`}
                 className="variable-inserter-item"
-                onClick={() => insertVariableIntoTestDataset(variable.key)}
+                onClick={() => {
+                  if (autoSuggestTarget === addDescRef.current) {
+                    insertVariableAtCursor(autoSuggestTarget, newText => setNewTest(prev => ({ ...prev, description: newText })))(variable.key);
+                  } else if (autoSuggestTarget === addExpRef.current) {
+                    insertVariableAtCursor(autoSuggestTarget, newText => setNewTest(prev => ({ ...prev, expectedData: newText })))(variable.key);
+                  } else if (autoSuggestTarget === editDescRef.current) {
+                    insertVariableAtCursor(autoSuggestTarget, newText => setEditingFields(prev => ({ ...prev, description: newText })))(variable.key);
+                  } else if (autoSuggestTarget === editExpRef.current) {
+                    insertVariableAtCursor(autoSuggestTarget, newText => setEditingFields(prev => ({ ...prev, expectedData: newText })))(variable.key);
+                  }
+                }}
                 title={`From Global Data Set: ${variable.source}`}
               >
                 {variable.key} <span className="variable-source-tag">({variable.source})</span>
@@ -490,10 +565,11 @@ export default function App() {
         </div>
       )}
 
+      {/* Modals DELETE + DATASETS */}
       <Modal isOpen={!!showDeleteConfirm} onClose={() => setShowDeleteConfirm(null)} title="Confirm Deletion" size="sm">
         {showDeleteConfirm && (
           <>
-            <p id="deleteConfirmDesc"> {/* Cet ID peut être utilisé par le Modal pour aria-describedby */}
+            <p id="deleteConfirmDesc">
               Are you sure you want to delete test <strong>{showDeleteConfirm.id}: {showDeleteConfirm.description}</strong>? This action cannot be undone.
             </p>
             <div className="modal-actions centered">
@@ -504,6 +580,7 @@ export default function App() {
         )}
       </Modal>
 
+      {/* Modal DATASETS */}
       <Modal isOpen={showManageDataSetsModal} onClose={() => { setShowManageDataSetsModal(false); setEditingDataSet(null); }} title="Manage Global Data Sets" size="lg">
         {editingDataSet ? (
           // FORMULAIRE D'ÉDITION DE DATASET
@@ -515,10 +592,22 @@ export default function App() {
             </div>
             <h4>Variables:</h4>
             {editingDataSet.variables && Array.isArray(editingDataSet.variables) && editingDataSet.variables.map((variable, index) => (
-              <div key={`edit-var-${index}`} className="variable-entry">
-                <input type="text" className="input" value={variable.key} onChange={e => handleDataSetVariableChange(editingDataSet.id, index, 'key', e.target.value)} placeholder="Variable Key (e.g., username)" />
+              <div key={variable.id || index} className="variable-entry">
+                <input
+                  type="text"
+                  className="input"
+                  value={variable.key}
+                  onChange={e => handleDataSetVariableChange(editingDataSet.id, index, 'key', e.target.value)}
+                  placeholder="Variable Key (e.g., username)"
+                />
                 <span className="variable-separator">:</span>
-                <input type="text" className="input" value={variable.value} onChange={e => handleDataSetVariableChange(editingDataSet.id, index, 'value', e.target.value)} placeholder="Variable Value" />
+                <input
+                  type="text"
+                  className="input"
+                  value={variable.value}
+                  onChange={e => handleDataSetVariableChange(editingDataSet.id, index, 'value', e.target.value)}
+                  placeholder="Variable Value"
+                />
                 <button type="button" className="btn-remove-variable" title="Remove variable" onClick={() => handleRemoveVariableFromDsForm(editingDataSet.id, index)}>×</button>
               </div>
             ))}
@@ -538,10 +627,22 @@ export default function App() {
             </div>
             <h4>Variables:</h4>
             {newDataSet.variables && Array.isArray(newDataSet.variables) && newDataSet.variables.map((variable, index) => (
-              <div key={`new-var-${index}`} className="variable-entry">
-                <input type="text" className="input" value={variable.key} onChange={e => handleDataSetVariableChange('new', index, 'key', e.target.value)} placeholder="Variable Key" />
+              <div key={variable.id || index} className="variable-entry">
+                <input
+                  type="text"
+                  className="input"
+                  value={variable.key}
+                  onChange={e => handleDataSetVariableChange('new', index, 'key', e.target.value)}
+                  placeholder="Variable Key"
+                />
                 <span className="variable-separator">:</span>
-                <input type="text" className="input" value={variable.value} onChange={e => handleDataSetVariableChange('new', index, 'value', e.target.value)} placeholder="Variable Value" />
+                <input
+                  type="text"
+                  className="input"
+                  value={variable.value}
+                  onChange={e => handleDataSetVariableChange('new', index, 'value', e.target.value)}
+                  placeholder="Variable Value"
+                />
                 <button type="button" className="btn-remove-variable" title="Remove variable" onClick={() => handleRemoveVariableFromDsForm('new', index)}>×</button>
               </div>
             ))}
